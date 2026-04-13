@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            padding: 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .content {
+            padding: 30px 20px;
+            color: #333;
+            line-height: 1.6;
+        }
+        .greeting {
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+        .invoice-header {
+            background-color: #f3f4f6;
+            border-bottom: 2px solid #2563eb;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .invoice-number {
+            font-size: 18px;
+            font-weight: bold;
+            color: #2563eb;
+        }
+        .invoice-date {
+            font-size: 12px;
+            color: #666;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        th {
+            background-color: #f3f4f6;
+            padding: 10px;
+            text-align: left;
+            font-weight: bold;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .text-right {
+            text-align: right;
+        }
+        .summary {
+            background-color: #f9fafb;
+            border-left: 4px solid #2563eb;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .summary-row:last-child {
+            border-bottom: none;
+        }
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-top: 2px solid #2563eb;
+            font-size: 18px;
+            font-weight: bold;
+            color: #2563eb;
+        }
+        .info {
+            background-color: #e0f2fe;
+            border-left: 4px solid #0ea5e9;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            color: #164e63;
+        }
+        .footer {
+            background-color: #f3f4f6;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+            border-top: 1px solid #e5e7eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>💰 Invoice Created</h1>
+        </div>
+        
+        <div class="content">
+            <div class="greeting">
+                <p>Dear <strong>{{ $patientName }}</strong>,</p>
+                <p>An invoice has been generated for your recent visit. Please find the details below:</p>
+            </div>
+            
+            <div class="invoice-header">
+                <div class="invoice-number">Invoice #{{ $invoiceNumber }}</div>
+                <div class="invoice-date">Date: {{ $invoiceDate }}</div>
+            </div>
+            
+            @if($items && count($items) > 0)
+            <table>
+                <thead>
+                    <tr>
+                        <th>Description</th>
+                        <th class="text-right">Qty</th>
+                        <th class="text-right">Unit Price</th>
+                        <th class="text-right">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($items as $item)
+                    <tr>
+                        <td>{{ $item['description'] ?? '' }}</td>
+                        <td class="text-right">{{ $item['quantity'] ?? 1 }}</td>
+                        <td class="text-right">Tshs {{ number_format($item['unit_price'] ?? 0, 2) }}</td>
+                        <td class="text-right">Tshs {{ number_format($item['total'] ?? 0, 2) }}</td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+            @endif
+            
+            <div class="summary">
+                <div class="summary-row">
+                    <span>Subtotal:</span>
+                    <span>Tshs {{ number_format($subtotal, 2) }}</span>
+                </div>
+                @if($tax > 0)
+                <div class="summary-row">
+                    <span>Tax (10%):</span>
+                    <span>Tshs {{ number_format($tax, 2) }}</span>
+                </div>
+                @endif
+                @if($discount > 0)
+                <div class="summary-row">
+                    <span>Discount:</span>
+                    <span>-Tshs {{ number_format($discount, 2) }}</span>
+                </div>
+                @endif
+                <div class="total-row">
+                    <span>Total Due:</span>
+                    <span>Tshs {{ number_format($total, 2) }}</span>
+                </div>
+            </div>
+            
+            <div class="info">
+                <strong>ℹ️ Payment Options:</strong> You can pay this invoice in person at our reception, via bank transfer, or using any major credit card. Status: <strong style="color: #d97706;">Pending Payment</strong>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>© {{ date('Y') }} AFYA Medical Center. All rights reserved.</p>
+            <p>This is an automated email. Please do not reply to this message.</p>
+            <p>For support, contact: support@afyamedical.com</p>
+        </div>
+    </div>
+</body>
+</html>

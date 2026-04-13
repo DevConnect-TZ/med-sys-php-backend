@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            padding: 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .content {
+            padding: 30px 20px;
+            color: #333;
+            line-height: 1.6;
+        }
+        .greeting {
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+        .details {
+            background-color: #f9fafb;
+            border-left: 4px solid #2563eb;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .details-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .details-row:last-child {
+            border-bottom: none;
+        }
+        .details-label {
+            font-weight: bold;
+            color: #666;
+            min-width: 120px;
+        }
+        .details-value {
+            color: #333;
+            text-align: right;
+        }
+        .footer {
+            background-color: #f3f4f6;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+            border-top: 1px solid #e5e7eb;
+        }
+        .button {
+            display: inline-block;
+            background-color: #2563eb;
+            color: white;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 4px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        .button:hover {
+            background-color: #1d4ed8;
+        }
+        .success {
+            background-color: #dbeafe;
+            border-left: 4px solid #0284c7;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            color: #0c4a6e;
+        }
+        .warning {
+            background-color: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            color: #92400e;
+        }
+        .info {
+            background-color: #e0f2fe;
+            border-left: 4px solid #0ea5e9;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            color: #164e63;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📅 Appointment Scheduled</h1>
+        </div>
+        
+        <div class="content">
+            <div class="greeting">
+                <p>Dear <strong>{{ $patientName }}</strong>,</p>
+                <p>Your appointment has been successfully scheduled. Here are the details:</p>
+            </div>
+            
+            <div class="details">
+                <div class="details-row">
+                    <span class="details-label">Doctor:</span>
+                    <span class="details-value"><strong>{{ $doctorName }}</strong></span>
+                </div>
+                <div class="details-row">
+                    <span class="details-label">Date:</span>
+                    <span class="details-value"><strong>{{ $appointmentDate }}</strong></span>
+                </div>
+                <div class="details-row">
+                    <span class="details-label">Time:</span>
+                    <span class="details-value"><strong>{{ $appointmentTime }}</strong></span>
+                </div>
+                <div class="details-row">
+                    <span class="details-label">Reason:</span>
+                    <span class="details-value">{{ $reason ?? 'Regular checkup' }}</span>
+                </div>
+            </div>
+            
+            <div class="info">
+                <strong>ℹ️ Important:</strong> Please arrive 10 minutes before your appointment. Bring any relevant medical documents or reports.
+            </div>
+            
+            <p>If you need to reschedule or cancel this appointment, please contact us at least 24 hours in advance.</p>
+            
+            <p>Thank you for choosing AFYA Medical Center!</p>
+        </div>
+        
+        <div class="footer">
+            <p>© {{ date('Y') }} AFYA Medical Center. All rights reserved.</p>
+            <p>This is an automated email. Please do not reply to this message.</p>
+            <p>For support, contact: support@afyamedical.com</p>
+        </div>
+    </div>
+</body>
+</html>

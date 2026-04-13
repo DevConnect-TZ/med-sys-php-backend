@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            padding: 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .content {
+            padding: 30px 20px;
+            color: #333;
+            line-height: 1.6;
+        }
+        .greeting {
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+        .details {
+            background-color: #dcfce7;
+            border-left: 4px solid #16a34a;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .details-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #bbf7d0;
+        }
+        .details-row:last-child {
+            border-bottom: none;
+        }
+        .details-label {
+            font-weight: bold;
+            color: #15803d;
+            min-width: 120px;
+        }
+        .details-value {
+            color: #15803d;
+            text-align: right;
+        }
+        .medication-list {
+            background-color: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .medication-item {
+            padding: 10px 0;
+            border-bottom: 1px solid #bbf7d0;
+        }
+        .medication-item:last-child {
+            border-bottom: none;
+        }
+        .info {
+            background-color: #e0f2fe;
+            border-left: 4px solid #0ea5e9;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            color: #164e63;
+        }
+        .footer {
+            background-color: #f3f4f6;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+            border-top: 1px solid #e5e7eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>💊 Prescription Ready for Pickup</h1>
+        </div>
+        
+        <div class="content">
+            <div class="greeting">
+                <p>Dear <strong>{{ $patientName }}</strong>,</p>
+                <p>Your prescription from Dr. {{ $doctorName }} is ready for pickup at our pharmacy!</p>
+            </div>
+            
+            <div class="details">
+                <div class="details-row">
+                    <span class="details-label">Prescribed by:</span>
+                    <span class="details-value"><strong>Dr. {{ $doctorName }}</strong></span>
+                </div>
+                <div class="details-row">
+                    <span class="details-label">Medications:</span>
+                    <span class="details-value"><strong>{{ $medicationCount }} item(s)</strong></span>
+                </div>
+            </div>
+            
+            @if($medications && count($medications) > 0)
+            <div class="medication-list">
+                <strong>Your Medications:</strong>
+                @foreach($medications as $med)
+                <div class="medication-item">
+                    <strong>{{ $med['name'] ?? 'Medication' }}</strong><br>
+                    <small>
+                        Dosage: {{ $med['dosage'] ?? 'N/A' }} | 
+                        Frequency: {{ $med['frequency'] ?? 'N/A' }} |
+                        Duration: {{ $med['duration'] ?? 'N/A' }}<br>
+                        Instructions: {{ $med['instructions'] ?? 'Follow doctor\'s instructions' }}
+                    </small>
+                </div>
+                @endforeach
+            </div>
+            @endif
+            
+            <div class="info">
+                <strong>ℹ️ Important:</strong> Please pickup your prescription within 7 days. After that, it may not be available.
+            </div>
+            
+            <p>Our pharmacy is open Monday to Friday, 8 AM to 6 PM, and Saturday 9 AM to 2 PM.</p>
+        </div>
+        
+        <div class="footer">
+            <p>© {{ date('Y') }} AFYA Medical Center. All rights reserved.</p>
+            <p>This is an automated email. Please do not reply to this message.</p>
+            <p>For support, contact: support@afyamedical.com</p>
+        </div>
+    </div>
+</body>
+</html>
