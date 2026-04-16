@@ -19,11 +19,12 @@ class PatientController extends Controller
     {
         $query = Patient::query();
 
-        // Search by name or patient number
+        // Search by name, patient number, or patient id
         if ($request->filled('search')) {
             $search = $request->input('search');
             $query->where(function ($q) use ($search) {
                 $q->where('patient_number', 'like', "%$search%")
+                    ->orWhere('patient_id', 'like', "%$search%")
                     ->orWhere('first_name', 'like', "%$search%")
                     ->orWhere('last_name', 'like', "%$search%")
                     ->orWhere('phone', 'like', "%$search%");
@@ -77,8 +78,19 @@ class PatientController extends Controller
         $lastPatient = Patient::latest('id')->first();
         $patientNumber = 'P' . str_pad(($lastPatient?->id ?? 0) + 1, 6, '0', STR_PAD_LEFT);
 
+        // Generate patient id (YYYY-XXXX)
+        $year = now()->format('Y');
+        $lastPatientThisYear = Patient::whereYear('created_at', $year)->latest('id')->first();
+        $lastSequence = 0;
+        if ($lastPatientThisYear && $lastPatientThisYear->patient_id) {
+            $parts = explode('-', $lastPatientThisYear->patient_id);
+            $lastSequence = (int) ($parts[1] ?? 0);
+        }
+        $patientId = $year . '-' . str_pad($lastSequence + 1, 4, '0', STR_PAD_LEFT);
+
         $patient = Patient::create([
             'patient_number' => $patientNumber,
+            'patient_id' => $patientId,
             ...$validated
         ]);
 

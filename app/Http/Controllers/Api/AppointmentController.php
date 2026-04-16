@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AppointmentResource;
 use App\Models\Appointment;
+use App\Models\DoctorSchedule;
 use App\Models\LabOrder;
 use App\Models\Patient;
 use App\Models\Prescription;
@@ -126,6 +127,20 @@ class AppointmentController extends Controller
             ], 422);
         }
 
+        // Check doctor schedule availability
+        $availability = $this->checkDoctorAvailability(
+            $validated['doctor_id'],
+            $validated['appointment_date'],
+            $validated['appointment_time']
+        );
+
+        if (!$availability['available']) {
+            return response()->json([
+                'success' => false,
+                'message' => $availability['message']
+            ], 422);
+        }
+
         $appointment = Appointment::create([
             'patient_id' => $validated['patient_id'],
             'patient_name' => $patient->full_name,
@@ -159,6 +174,26 @@ class AppointmentController extends Controller
             'reason' => 'sometimes|string',
             'notes' => 'sometimes|string',
         ]);
+
+        // Check doctor schedule availability if date or time changed
+        if (isset($validated['appointment_date']) || isset($validated['appointment_time'])) {
+            $date = $validated['appointment_date'] ?? $appointment->appointment_date->format('Y-m-d');
+            $time = $validated['appointment_time'] ?? $appointment->appointment_time->format('H:i');
+
+            $availability = $this->checkDoctorAvailability(
+                $appointment->doctor_id,
+                $date,
+                $time,
+                $appointment->id
+            );
+
+            if (!$availability['available']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $availability['message']
+                ], 422);
+            }
+        }
 
         $appointment->update($validated);
 
@@ -197,7 +232,7 @@ class AppointmentController extends Controller
     public function doctorReview(Request $request, Appointment $appointment): JsonResponse
     {
         $user = auth()->user();
-        if (!$user->hasAnyRole(['doctor', 'admin']) || ($user->hasRole('doctor') && $appointment->doctor_id !== $user->id)) {
+        if (!$user->hasRole('doctor') || $appointment->doctor_id !== $user->id) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
@@ -273,7 +308,7 @@ class AppointmentController extends Controller
     public function markPaid(Appointment $appointment): JsonResponse
     {
         $user = auth()->user();
-        if (!$user->hasAnyRole(['cashier', 'admin'])) {
+        if (!$user->hasRole('cashier')) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
@@ -296,7 +331,7 @@ class AppointmentController extends Controller
     public function prescribe(Request $request, Appointment $appointment): JsonResponse
     {
         $user = auth()->user();
-        if (!$user->hasAnyRole(['doctor', 'admin']) || ($user->hasRole('doctor') && $appointment->doctor_id !== $user->id)) {
+        if (!$user->hasRole('doctor') || $appointment->doctor_id !== $user->id) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
@@ -348,7 +383,7 @@ class AppointmentController extends Controller
     public function dispense(Appointment $appointment): JsonResponse
     {
         $user = auth()->user();
-        if (!$user->hasAnyRole(['pharmacist', 'admin'])) {
+        if (!$user->hasRole('pharmacist')) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
@@ -368,5 +403,56 @@ class AppointmentController extends Controller
             'message' => 'Medicines dispensed. Appointment completed.',
             'appointment' => new AppointmentResource($appointment)
         ], 200);
+    }
+
+    /**
+     * Check if a doctor is available at the given date and time
+     */
+    private function checkDoctorAvailability(int $doctorId, string $date, string $time, ?int $excludeAppointmentId = null): array
+    {
+        $dayOfWeek = (int) \Carbon\Carbon::parse($date)->format('w');
+
+        $schedule = DoctorSchedule::where('doctor_id', $doctorId)
+            ->where('day_of_week', $dayOfWeek)
+            ->where('is_active', true)
+            ->first();
+
+        if (!$schedule) {
+            return [
+                'available' => false,
+                'message' => 'Doctor does not have a schedule for this day',
+            ];
+        }
+
+        $start = $schedule->start_time->format('H:i');
+        $end = $schedule->end_time->format('H:i');
+
+        if ($time < $start || $time > $end) {
+            return [
+                'available' => false,
+                'message' => "Doctor is only available from {$start} to {$end} on {$schedule->day_name}",
+            ];
+        }
+
+        $conflictQuery = Appointment::where('doctor_id', $doctorId)
+            ->where('appointment_date', $date)
+            ->where('appointment_time', $time)
+            ->whereIn('status', ['scheduled', 'confirmed']);
+
+        if ($excludeAppointmentId) {
+            $conflictQuery->where('id', '!=', $excludeAppointmentId);
+        }
+
+        if ($conflictQuery->exists()) {
+            return [
+                'available' => false,
+                'message' => 'Doctor already has an appointment at this time',
+            ];
+        }
+
+        return [
+            'available' => true,
+            'message' => 'Doctor is available',
+        ];
     }
 }

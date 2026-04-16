@@ -1,7 +1,9 @@
 <?php
 
+use App\Http\Controllers\Api\AdmissionController;
 use App\Http\Controllers\Api\AppointmentController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\DoctorScheduleController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\LabController;
 use App\Http\Controllers\Api\MedicalTestController;
@@ -34,6 +36,27 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/medical-tests/{medicalTest}', [MedicalTestController::class, 'destroy']);
     });
 
+    // Doctor Schedules (read for all authenticated, mutations admin only)
+    Route::get('/doctor-schedules', [DoctorScheduleController::class, 'index']);
+    Route::get('/doctor-schedules/check-availability', [DoctorScheduleController::class, 'checkAvailability']);
+    Route::middleware('role:admin')->group(function () {
+        Route::post('/doctor-schedules', [DoctorScheduleController::class, 'store']);
+        Route::get('/doctor-schedules/{schedule}', [DoctorScheduleController::class, 'show']);
+        Route::put('/doctor-schedules/{schedule}', [DoctorScheduleController::class, 'update']);
+        Route::delete('/doctor-schedules/{schedule}', [DoctorScheduleController::class, 'destroy']);
+    });
+
+    // Admissions & Referrals (view for doctor/nurse/admin/receptionist, manage for doctor)
+    Route::middleware('role:admin,doctor,nurse,receptionist')->group(function () {
+        Route::get('/admissions', [AdmissionController::class, 'index']);
+        Route::get('/admissions/{admission}', [AdmissionController::class, 'show']);
+    });
+    Route::middleware('role:doctor')->group(function () {
+        Route::post('/admissions', [AdmissionController::class, 'store']);
+        Route::post('/admissions/{admission}/discharge', [AdmissionController::class, 'discharge']);
+        Route::post('/admissions/{admission}/complete-referral', [AdmissionController::class, 'completeReferral']);
+    });
+
     // Admin only routes
     Route::middleware('role:admin')->group(function () {
         Route::post('/auth/register', [AuthController::class, 'register']);
@@ -54,14 +77,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/patients/{patient}/visits', [PatientController::class, 'getVisits']);
     });
 
-    // Patient Management (admin, receptionist)
-    Route::middleware('role:admin,receptionist')->group(function () {
+    // Patient Management (receptionist)
+    Route::middleware('role:receptionist')->group(function () {
         Route::post('/patients', [PatientController::class, 'store']);
         Route::put('/patients/{patient}', [PatientController::class, 'update']);
-    });
-
-    // Patient Delete (admin only)
-    Route::middleware('role:admin')->group(function () {
         Route::delete('/patients/{patient}', [PatientController::class, 'destroy']);
     });
 
@@ -69,35 +88,35 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/appointments', [AppointmentController::class, 'index']);
     Route::get('/appointments/{appointment}', [AppointmentController::class, 'show']);
 
-    // Appointment Management (admin, receptionist)
-    Route::middleware('role:admin,receptionist')->group(function () {
+    // Appointment Management (receptionist)
+    Route::middleware('role:receptionist')->group(function () {
         Route::post('/appointments', [AppointmentController::class, 'store']);
         Route::put('/appointments/{appointment}', [AppointmentController::class, 'update']);
         Route::patch('/appointments/{appointment}/cancel', [AppointmentController::class, 'cancel']);
     });
 
     // Appointment Workflow Transitions
-    Route::middleware('role:admin,doctor')->group(function () {
+    Route::middleware('role:doctor')->group(function () {
         Route::post('/appointments/{appointment}/doctor-review', [AppointmentController::class, 'doctorReview']);
         Route::post('/appointments/{appointment}/prescribe', [AppointmentController::class, 'prescribe']);
     });
 
-    Route::middleware('role:admin,cashier')->group(function () {
+    Route::middleware('role:cashier')->group(function () {
         Route::post('/appointments/{appointment}/mark-paid', [AppointmentController::class, 'markPaid']);
     });
 
-    Route::middleware('role:admin,pharmacist')->group(function () {
+    Route::middleware('role:pharmacist')->group(function () {
         Route::post('/appointments/{appointment}/dispense', [AppointmentController::class, 'dispense']);
     });
 
-    // Visit/EMR Management (admin, doctor, nurse)
-    Route::middleware('role:admin,doctor,nurse')->group(function () {
+    // Visit/EMR Management (admin, doctor, nurse, receptionist)
+    Route::middleware('role:admin,doctor,nurse,receptionist')->group(function () {
         Route::get('/visits', [VisitController::class, 'index']);
         Route::get('/visits/{visit}', [VisitController::class, 'show']);
     });
 
-    // Visit/EMR Management (admin, doctor)
-    Route::middleware('role:admin,doctor')->group(function () {
+    // Visit/EMR Management (doctor, receptionist)
+    Route::middleware('role:doctor,receptionist')->group(function () {
         Route::post('/visits', [VisitController::class, 'store']);
         Route::put('/visits/{visit}', [VisitController::class, 'update']);
     });
@@ -108,14 +127,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/labs/orders/{labOrder}', [LabController::class, 'showOrder']);
     });
 
-    // Lab Orders (admin, doctor)
-    Route::middleware('role:admin,doctor')->group(function () {
+    // Lab Orders (doctor)
+    Route::middleware('role:doctor')->group(function () {
         Route::post('/labs/orders', [LabController::class, 'storeOrder']);
         Route::put('/labs/orders/{labOrder}', [LabController::class, 'updateOrder']);
     });
 
-    // Lab Results (admin, lab_technician)
-    Route::middleware('role:admin,lab_technician')->group(function () {
+    // Lab Results (lab_technician)
+    Route::middleware('role:lab_technician')->group(function () {
         Route::post('/labs/results', [LabController::class, 'storeResult']);
     });
 
@@ -153,14 +172,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/billing/invoices/{invoice}', [InvoiceController::class, 'show']);
     });
 
-    // Invoices (admin, receptionist)
-    Route::middleware('role:admin,receptionist')->group(function () {
+    // Invoices (receptionist)
+    Route::middleware('role:receptionist')->group(function () {
         Route::post('/billing/invoices', [InvoiceController::class, 'store']);
         Route::put('/billing/invoices/{invoice}', [InvoiceController::class, 'update']);
     });
 
-    // Invoices (admin, cashier)
-    Route::middleware('role:admin,cashier')->group(function () {
+    // Invoices (cashier)
+    Route::middleware('role:cashier')->group(function () {
         Route::patch('/billing/invoices/{invoice}/pay', [InvoiceController::class, 'markAsPaid']);
     });
 });
