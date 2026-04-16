@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Admission;
 use App\Models\Appointment;
+use App\Models\Bed;
 use App\Models\Patient;
 use App\Models\User;
 use App\Models\Visit;
@@ -79,6 +80,7 @@ class AdmissionController extends Controller
             'doctor_id' => 'required|exists:users,id',
             'visit_id' => 'nullable|exists:visits,id',
             'appointment_id' => 'nullable|exists:appointments,id',
+            'bed_id' => 'nullable|exists:beds,id',
             'type' => 'required|in:admission,referral',
             'location' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
@@ -93,6 +95,18 @@ class AdmissionController extends Controller
         }
 
         $patient = Patient::findOrFail($validated['patient_id']);
+
+        // Validate bed availability for admissions
+        if (!empty($validated['bed_id']) && $validated['type'] === 'admission') {
+            $bed = Bed::findOrFail($validated['bed_id']);
+            if ($bed->is_occupied) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Selected bed is already occupied',
+                ], 422);
+            }
+            $bed->update(['is_occupied' => true]);
+        }
 
         $admission = Admission::create([
             ...$validated,
@@ -115,6 +129,8 @@ class AdmissionController extends Controller
                 'patient_id' => $admission->patient_id,
                 'patient_name' => $patient->full_name,
                 'doctor_id' => $admission->doctor_id,
+                'bed_id' => $admission->bed_id,
+                'bed_name' => $admission->bed ? ($admission->bed->ward?->name . ' - Bed ' . $admission->bed->bed_number) : null,
                 'type' => $admission->type,
                 'status' => $admission->status,
                 'location' => $admission->location,
@@ -141,6 +157,10 @@ class AdmissionController extends Controller
                 'success' => false,
                 'message' => 'Patient is already discharged',
             ], 422);
+        }
+
+        if ($admission->bed_id) {
+            Bed::where('id', $admission->bed_id)->update(['is_occupied' => false]);
         }
 
         $admission->update([

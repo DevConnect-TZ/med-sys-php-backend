@@ -15,6 +15,7 @@ class Admission extends Model
         'doctor_id',
         'visit_id',
         'appointment_id',
+        'bed_id',
         'type',
         'status',
         'location',
@@ -44,5 +45,10 @@ class Admission extends Model
     public function appointment(): BelongsTo
     {
         return $this->belongsTo(Appointment::class);
+    }
+
+    public function bed(): BelongsTo
+    {
+        return $this->belongsTo(Bed::class);
     }
 }

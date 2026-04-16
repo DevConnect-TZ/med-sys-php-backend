@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\PatientController;
 use App\Http\Controllers\Api\PharmacyController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\VisitController;
+use App\Http\Controllers\Api\WardBedController;
 use Illuminate\Support\Facades\Route;
 
 // Public routes
@@ -56,6 +57,20 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/admissions/{admission}/discharge', [AdmissionController::class, 'discharge']);
         Route::post('/admissions/{admission}/complete-referral', [AdmissionController::class, 'completeReferral']);
     });
+
+    // Wards & Beds (admin only)
+    Route::middleware('role:admin')->group(function () {
+        Route::get('/wards', [WardBedController::class, 'indexWards']);
+        Route::post('/wards', [WardBedController::class, 'storeWard']);
+        Route::put('/wards/{ward}', [WardBedController::class, 'updateWard']);
+        Route::delete('/wards/{ward}', [WardBedController::class, 'destroyWard']);
+
+        Route::get('/beds', [WardBedController::class, 'indexBeds']);
+        Route::post('/beds', [WardBedController::class, 'storeBed']);
+        Route::put('/beds/{bed}', [WardBedController::class, 'updateBed']);
+        Route::delete('/beds/{bed}', [WardBedController::class, 'destroyBed']);
+    });
+    Route::get('/beds', [WardBedController::class, 'indexBeds']);
 
     // Admin only routes
     Route::middleware('role:admin')->group(function () {
