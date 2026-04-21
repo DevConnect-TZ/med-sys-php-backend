@@ -113,14 +113,6 @@ class AdmissionController extends Controller
             'status' => 'active',
         ]);
 
-        // Optionally update visit/appointment status
-        if (!empty($validated['visit_id'])) {
-            Visit::where('id', $validated['visit_id'])->update(['status' => $validated['type'] === 'admission' ? 'admitted' : 'referred']);
-        }
-        if (!empty($validated['appointment_id'])) {
-            Appointment::where('id', $validated['appointment_id'])->update(['status' => $validated['type'] === 'admission' ? 'admitted' : 'referred']);
-        }
-
         return response()->json([
             'success' => true,
             'message' => $validated['type'] === 'admission' ? 'Patient admitted successfully' : 'Patient referred successfully',

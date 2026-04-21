@@ -15,18 +15,23 @@ class Visit extends Model
         'doctor_name',
         'appointment_id',
         'visit_date',
+        'visit_time',
         'chief_complaint',
         'diagnosis',
         'medical_notes',
         'vital_signs',
         'consultation_fee',
         'status',
+        'workflow_status',
+        'visit_number',
     ];
 
     protected $casts = [
         'visit_date' => 'date',
+        'visit_time' => 'datetime:H:i',
         'vital_signs' => 'json',
         'consultation_fee' => 'decimal:2',
+        'workflow_status' => 'string',
     ];
 
     public function patient(): BelongsTo
@@ -57,5 +62,10 @@ class Visit extends Model
     public function invoices(): HasMany
     {
         return $this->hasMany(Invoice::class);
+    }
+
+    public function latestLabOrder(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(LabOrder::class)->latestOfMany();
     }
 }

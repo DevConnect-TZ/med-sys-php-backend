@@ -4,12 +4,15 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\VisitResource;
+use App\Models\LabOrder;
 use App\Models\Patient;
+use App\Models\Prescription;
 use App\Models\User;
 use App\Models\Visit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 
 class VisitController extends Controller
 {
@@ -20,6 +23,44 @@ class VisitController extends Controller
     public function index(Request $request): AnonymousResourceCollection
     {
         $query = Visit::query();
+
+        // Role-based queue filtering
+        if ($request->boolean('my_queue')) {
+            $user = auth()->user();
+            $role = $user->role;
+
+            switch ($role) {
+                case 'doctor':
+                    $query->where(function ($q) use ($user) {
+                        $q->where('workflow_status', 'scheduled')
+                          ->where('doctor_id', $user->id)
+                          ->orWhere('workflow_status', 'lab_completed')
+                          ->where('doctor_id', $user->id);
+                    });
+                    break;
+                case 'cashier':
+                    $query->where('workflow_status', 'awaiting_payment');
+                    break;
+                case 'lab_technician':
+                    $query->whereIn('workflow_status', ['paid', 'lab_pending']);
+                    break;
+                case 'pharmacist':
+                    $query->where('workflow_status', 'pharmacy_pending');
+                    break;
+                case 'receptionist':
+                    $query->whereIn('workflow_status', ['scheduled']);
+                    break;
+                case 'admin':
+                    // Admin sees all
+                    break;
+                default:
+                    $query->where('workflow_status', 'scheduled');
+            }
+        }
+
+        if ($request->has('workflow_status')) {
+            $query->where('workflow_status', $request->input('workflow_status'));
+        }
 
         // Filter by patient
         if ($request->has('patient_id')) {
@@ -48,6 +89,8 @@ class VisitController extends Controller
      */
     public function show(Visit $visit): JsonResponse
     {
+        $visit->load(['labOrders.labResult', 'prescriptions', 'invoices']);
+
         return response()->json([
             'success' => true,
             'visit' => new VisitResource($visit)
@@ -65,10 +108,11 @@ class VisitController extends Controller
             'doctor_id' => 'required|exists:users,id',
             'appointment_id' => 'nullable|exists:appointments,id',
             'visit_date' => 'required|date',
+            'visit_time' => 'nullable|date_format:H:i',
             'chief_complaint' => 'nullable|string',
             'diagnosis' => 'nullable|string',
             'medical_notes' => 'nullable|string',
-            'vital_signs' => 'nullable|json',
+            'vital_signs' => 'nullable|array',
             'consultation_fee' => 'nullable|numeric|min:0',
         ]);
 
@@ -91,12 +135,15 @@ class VisitController extends Controller
             'doctor_name' => $doctor->name,
             'appointment_id' => $validated['appointment_id'] ?? null,
             'visit_date' => $validated['visit_date'],
+            'visit_time' => $validated['visit_time'] ?? null,
             'chief_complaint' => $validated['chief_complaint'] ?? null,
             'diagnosis' => $validated['diagnosis'] ?? null,
             'medical_notes' => $validated['medical_notes'] ?? null,
             'vital_signs' => $validated['vital_signs'] ?? null,
             'consultation_fee' => $validated['consultation_fee'] ?? 0.00,
-            'status' => 'completed',
+            'status' => 'scheduled',
+            'workflow_status' => 'scheduled',
+            'visit_number' => 'VST-' . now()->format('Ymd') . '-' . strtoupper(substr(uniqid(), -4)),
         ]);
 
         // Update appointment workflow status only if it's still scheduled
@@ -121,7 +168,7 @@ class VisitController extends Controller
             'chief_complaint' => 'sometimes|string',
             'diagnosis' => 'sometimes|string',
             'medical_notes' => 'sometimes|string',
-            'vital_signs' => 'sometimes|json',
+            'vital_signs' => 'sometimes|array',
             'consultation_fee' => 'sometimes|numeric|min:0',
         ]);
 
@@ -130,6 +177,170 @@ class VisitController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Visit updated successfully',
+            'visit' => new VisitResource($visit)
+        ], 200);
+    }
+
+    /**
+     * Doctor reviews visit, adds/updatess visit details + lab orders, forwards to cashier
+     */
+    public function doctorReview(Request $request, Visit $visit): JsonResponse
+    {
+        $user = auth()->user();
+        if (!$user->hasRole('doctor') || $visit->doctor_id !== $user->id) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        if (!in_array($visit->workflow_status, ['scheduled'])) {
+            return response()->json(['success' => false, 'message' => 'Visit cannot be reviewed at this stage'], 422);
+        }
+
+        $validated = $request->validate([
+            'chief_complaint' => 'nullable|string',
+            'diagnosis' => 'nullable|string',
+            'medical_notes' => 'nullable|string',
+            'vital_signs' => 'nullable|array',
+            'consultation_fee' => 'nullable|numeric|min:0',
+            'lab_tests' => 'nullable|array',
+            'lab_tests.*.test_name' => 'required_with:lab_tests|string',
+            'lab_tests.*.test_type' => 'nullable|string',
+            'lab_tests.*.cost' => 'nullable|numeric|min:0',
+            'lab_tests.*.priority' => 'nullable|in:normal,urgent',
+            'lab_tests.*.notes' => 'nullable|string',
+        ]);
+
+        DB::transaction(function () use ($visit, $validated) {
+            $visit->update([
+                'chief_complaint' => $validated['chief_complaint'] ?? $visit->chief_complaint,
+                'diagnosis' => $validated['diagnosis'] ?? $visit->diagnosis,
+                'medical_notes' => $validated['medical_notes'] ?? $visit->medical_notes,
+                'vital_signs' => $validated['vital_signs'] ?? $visit->vital_signs,
+                'consultation_fee' => $validated['consultation_fee'] ?? $visit->consultation_fee,
+                'workflow_status' => 'awaiting_payment',
+            ]);
+
+            if (!empty($validated['lab_tests'])) {
+                foreach ($validated['lab_tests'] as $test) {
+                    LabOrder::create([
+                        'patient_id' => $visit->patient_id,
+                        'patient_name' => $visit->patient_name,
+                        'doctor_id' => $visit->doctor_id,
+                        'doctor_name' => $visit->doctor_name,
+                        'visit_id' => $visit->id,
+                        'test_name' => $test['test_name'],
+                        'test_type' => $test['test_type'] ?? null,
+                        'priority' => $test['priority'] ?? 'normal',
+                        'notes' => $test['notes'] ?? null,
+                        'order_date' => now()->toDateString(),
+                        'cost' => $test['cost'] ?? 0.00,
+                        'status' => 'pending',
+                    ]);
+                }
+            }
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Visit reviewed and forwarded to cashier',
+            'visit' => new VisitResource($visit->fresh())
+        ], 200);
+    }
+
+    /**
+     * Cashier marks visit as paid
+     */
+    public function markPaid(Visit $visit): JsonResponse
+    {
+        $user = auth()->user();
+        if (!$user->hasRole('cashier')) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        if ($visit->workflow_status !== 'awaiting_payment') {
+            return response()->json(['success' => false, 'message' => 'Visit is not awaiting payment'], 422);
+        }
+
+        $pendingLabs = $visit->labOrders()->where('status', 'pending')->count();
+        $visit->update(['workflow_status' => $pendingLabs > 0 ? 'lab_pending' : 'lab_completed']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Payment confirmed. Visit forwarded to lab.',
+            'visit' => new VisitResource($visit)
+        ], 200);
+    }
+
+    /**
+     * Doctor prescribes medicines after lab results
+     */
+    public function prescribe(Request $request, Visit $visit): JsonResponse
+    {
+        $user = auth()->user();
+        if (!$user->hasRole('doctor') || $visit->doctor_id !== $user->id) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        if ($visit->workflow_status !== 'lab_completed') {
+            return response()->json(['success' => false, 'message' => 'Lab results are not ready for prescription'], 422);
+        }
+
+        $validated = $request->validate([
+            'medications' => 'required|array',
+            'medications.*.name' => 'required|string',
+            'medications.*.dosage' => 'required|string',
+            'medications.*.frequency' => 'required|string',
+            'medications.*.duration' => 'required|string',
+            'medications.*.quantity' => 'required|numeric',
+            'medications.*.price' => 'nullable|numeric|min:0',
+            'medications.*.instructions' => 'nullable|string',
+            'notes' => 'nullable|string',
+        ]);
+
+        Prescription::create([
+            'patient_id' => $visit->patient_id,
+            'patient_name' => $visit->patient_name,
+            'doctor_id' => $visit->doctor_id,
+            'doctor_name' => $visit->doctor_name,
+            'visit_id' => $visit->id,
+            'medications' => $validated['medications'],
+            'status' => 'pending',
+            'prescription_date' => now()->toDateString(),
+            'notes' => $validated['notes'] ?? null,
+        ]);
+
+        $visit->update(['workflow_status' => 'pharmacy_pending']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Prescription created and forwarded to pharmacy',
+            'visit' => new VisitResource($visit)
+        ], 200);
+    }
+
+    /**
+     * Pharmacist dispenses prescription, completes visit
+     */
+    public function dispense(Visit $visit): JsonResponse
+    {
+        $user = auth()->user();
+        if (!$user->hasRole('pharmacist')) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        if ($visit->workflow_status !== 'pharmacy_pending') {
+            return response()->json(['success' => false, 'message' => 'Visit is not pending pharmacy dispense'], 422);
+        }
+
+        $prescription = $visit->prescriptions()->where('status', 'pending')->latest()->first();
+        if ($prescription) {
+            $prescription->update(['status' => 'dispensed']);
+        }
+
+        $visit->update(['workflow_status' => 'completed', 'status' => 'completed']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Medicines dispensed. Visit completed.',
             'visit' => new VisitResource($visit)
         ], 200);
     }

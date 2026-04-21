@@ -43,6 +43,10 @@ class LabController extends Controller
             $query->where('appointment_id', $request->input('appointment_id'));
         }
 
+        if ($request->has('visit_id')) {
+            $query->where('visit_id', $request->input('visit_id'));
+        }
+
         $perPage = $request->input('per_page', 15);
         $orders = $query->orderBy('order_date', 'desc')->paginate($perPage);
 
@@ -176,6 +180,16 @@ class LabController extends Controller
                 ->count();
             if ($pendingCount === 0) {
                 $labOrder->appointment->update(['workflow_status' => 'lab_completed']);
+            }
+        }
+
+        // Auto-advance visit workflow if all lab orders are completed
+        if ($labOrder->visit_id) {
+            $pendingCount = LabOrder::where('visit_id', $labOrder->visit_id)
+                ->where('status', '!=', 'completed')
+                ->count();
+            if ($pendingCount === 0) {
+                $labOrder->visit->update(['workflow_status' => 'lab_completed']);
             }
         }
 

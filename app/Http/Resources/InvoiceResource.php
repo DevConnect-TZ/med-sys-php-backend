@@ -20,6 +20,7 @@ class InvoiceResource extends JsonResource
             'patient_id' => $this->patient_id,
             'patient_name' => $this->patient_name,
             'visit_id' => $this->visit_id,
+            'appointment_id' => $this->appointment_id,
             'invoice_date' => $this->invoice_date,
             'items' => $this->items,
             'subtotal' => $this->subtotal,

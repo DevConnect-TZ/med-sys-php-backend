@@ -24,7 +24,9 @@ return new class extends Migration
             $table->text('medical_notes')->nullable();
             $table->json('vital_signs')->nullable(); // {bp, temp, pulse, weight}
             $table->decimal('consultation_fee', 10, 2)->default(0.00);
-            $table->enum('status', ['in_progress', 'completed'])->default('completed');
+            $table->enum('status', ['scheduled', 'in_progress', 'completed'])->default('scheduled');
+            $table->string('visit_number')->nullable()->unique();
+            $table->time('visit_time')->nullable();
             $table->timestamps();
             
             // Indexes

@@ -51,7 +51,7 @@ class AppointmentController extends Controller
                     $query->where('workflow_status', 'awaiting_payment');
                     break;
                 case 'lab_technician':
-                    $query->where('workflow_status', 'paid');
+                    $query->whereIn('workflow_status', ['paid', 'lab_pending']);
                     break;
                 case 'pharmacist':
                     $query->where('workflow_status', 'pharmacy_pending');
@@ -263,12 +263,15 @@ class AppointmentController extends Controller
                 'doctor_name' => $appointment->doctor_name,
                 'appointment_id' => $appointment->id,
                 'visit_date' => now()->toDateString(),
+                'visit_time' => now()->format('H:i'),
                 'chief_complaint' => $validated['chief_complaint'] ?? null,
                 'diagnosis' => $validated['diagnosis'] ?? null,
                 'medical_notes' => $validated['medical_notes'] ?? null,
                 'vital_signs' => $validated['vital_signs'] ?? null,
                 'consultation_fee' => $validated['consultation_fee'] ?? 0.00,
-                'status' => 'completed',
+                'status' => 'scheduled',
+                'workflow_status' => 'awaiting_payment',
+                'visit_number' => 'VST-' . now()->format('Ymd') . '-' . strtoupper(substr(uniqid(), -4)),
             ]);
 
             // Create lab orders
@@ -316,7 +319,8 @@ class AppointmentController extends Controller
             return response()->json(['success' => false, 'message' => 'Appointment is not awaiting payment'], 422);
         }
 
-        $appointment->update(['workflow_status' => 'paid']);
+        $pendingLabs = $appointment->labOrders()->where('status', 'pending')->count();
+        $appointment->update(['workflow_status' => $pendingLabs > 0 ? 'lab_pending' : 'lab_completed']);
 
         return response()->json([
             'success' => true,

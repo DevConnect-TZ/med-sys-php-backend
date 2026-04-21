@@ -90,12 +90,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/patients', [PatientController::class, 'index']);
         Route::get('/patients/{patient}', [PatientController::class, 'show']);
         Route::get('/patients/{patient}/visits', [PatientController::class, 'getVisits']);
+        Route::put('/patients/{patient}', [PatientController::class, 'update']);
     });
 
-    // Patient Management (receptionist)
-    Route::middleware('role:receptionist')->group(function () {
+    // Patient Management (admin, receptionist)
+    Route::middleware('role:admin,receptionist')->group(function () {
         Route::post('/patients', [PatientController::class, 'store']);
-        Route::put('/patients/{patient}', [PatientController::class, 'update']);
         Route::delete('/patients/{patient}', [PatientController::class, 'destroy']);
     });
 
@@ -130,10 +130,23 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/visits/{visit}', [VisitController::class, 'show']);
     });
 
-    // Visit/EMR Management (doctor, receptionist)
-    Route::middleware('role:doctor,receptionist')->group(function () {
+    // Visit/EMR Management (doctor, receptionist, nurse)
+    Route::middleware('role:doctor,receptionist,nurse')->group(function () {
         Route::post('/visits', [VisitController::class, 'store']);
         Route::put('/visits/{visit}', [VisitController::class, 'update']);
+    });
+
+    Route::middleware('role:doctor')->group(function () {
+        Route::post('/visits/{visit}/doctor-review', [VisitController::class, 'doctorReview']);
+        Route::post('/visits/{visit}/prescribe', [VisitController::class, 'prescribe']);
+    });
+
+    Route::middleware('role:cashier')->group(function () {
+        Route::post('/visits/{visit}/mark-paid', [VisitController::class, 'markPaid']);
+    });
+
+    Route::middleware('role:pharmacist')->group(function () {
+        Route::post('/visits/{visit}/dispense', [VisitController::class, 'dispense']);
     });
 
     // Lab Orders (admin, doctor, lab_technician)
