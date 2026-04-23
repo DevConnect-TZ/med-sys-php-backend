@@ -161,6 +161,12 @@ class InvoiceController extends Controller
             $invoice->appointment->update(['workflow_status' => 'paid']);
         }
 
+        // Auto-advance visit workflow if linked
+        if ($invoice->visit_id && $invoice->visit->workflow_status === 'awaiting_payment') {
+            $pendingLabs = $invoice->visit->labOrders()->where('status', 'pending')->count();
+            $invoice->visit->update(['workflow_status' => $pendingLabs > 0 ? 'lab_pending' : 'lab_completed']);
+        }
+
         // Send payment confirmation email
         $this->emailService->sendInvoicePaid($invoice);
 

@@ -25,6 +25,8 @@ Route::get('/invitations/{token}/validate', [UserController::class, 'validateInv
 Route::middleware('auth:sanctum')->group(function () {
     // Auth routes
     Route::get('/auth/me', [AuthController::class, 'me']);
+    Route::put('/auth/me', [AuthController::class, 'updateProfile']);
+    Route::post('/auth/change-password', [AuthController::class, 'changePassword']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/user/{user}', [AuthController::class, 'show']);
     Route::get('/doctors', [AuthController::class, 'getDoctors']);
@@ -130,8 +132,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/visits/{visit}', [VisitController::class, 'show']);
     });
 
-    // Visit/EMR Management (doctor, receptionist, nurse)
-    Route::middleware('role:doctor,receptionist,nurse')->group(function () {
+    // Visit/EMR Management (receptionist, nurse)
+    Route::middleware('role:receptionist,nurse')->group(function () {
         Route::post('/visits', [VisitController::class, 'store']);
         Route::put('/visits/{visit}', [VisitController::class, 'update']);
     });

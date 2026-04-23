@@ -21,7 +21,7 @@ return new class extends Migration
         // Fix enum to include 'scheduled' if using MySQL/strict DB
         $driver = DB::getDriverName();
         if ($driver === 'mysql') {
-            DB::statement("ALTER TABLE visits MODIFY COLUMN status ENUM('scheduled', 'in_progress', 'completed') DEFAULT 'scheduled'");
+            DB::statement("ALTER TABLE visits MODIFY COLUMN status ENUM('scheduled', 'in_progress', 'completed', 'referred') DEFAULT 'scheduled'");
         } elseif ($driver === 'sqlite') {
             // SQLite doesn't support MODIFY COLUMN; assume fresh or handled manually
         } else {

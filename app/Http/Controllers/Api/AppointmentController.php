@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\AppointmentResource;
 use App\Models\Appointment;
 use App\Models\DoctorSchedule;
+use App\Models\Invoice;
 use App\Models\LabOrder;
 use App\Models\Patient;
 use App\Models\Prescription;
@@ -296,6 +297,56 @@ class AppointmentController extends Controller
             }
 
             $appointment->update(['workflow_status' => 'awaiting_payment']);
+
+            // Auto-generate invoice for cashier
+            $items = [];
+            $subtotal = 0;
+
+            $consultationFee = $validated['consultation_fee'] ?? 0;
+            if ($consultationFee > 0) {
+                $items[] = [
+                    'description' => 'Consultation Fee',
+                    'quantity' => 1,
+                    'unit_price' => $consultationFee,
+                    'total' => $consultationFee,
+                ];
+                $subtotal += $consultationFee;
+            }
+
+            if (!empty($validated['lab_tests'])) {
+                foreach ($validated['lab_tests'] as $test) {
+                    $cost = $test['cost'] ?? 0;
+                    if ($cost > 0) {
+                        $items[] = [
+                            'description' => 'Lab Test: ' . $test['test_name'],
+                            'quantity' => 1,
+                            'unit_price' => $cost,
+                            'total' => $cost,
+                        ];
+                        $subtotal += $cost;
+                    }
+                }
+            }
+
+            if (!empty($items)) {
+                $lastInvoice = Invoice::latest('id')->first();
+                $invoiceNumber = 'INV' . str_pad(($lastInvoice?->id ?? 0) + 1, 6, '0', STR_PAD_LEFT);
+
+                Invoice::create([
+                    'invoice_number' => $invoiceNumber,
+                    'patient_id' => $appointment->patient_id,
+                    'patient_name' => $appointment->patient_name,
+                    'visit_id' => $visit->id,
+                    'appointment_id' => $appointment->id,
+                    'invoice_date' => now()->toDateString(),
+                    'items' => $items,
+                    'subtotal' => $subtotal,
+                    'tax' => 0.00,
+                    'discount' => 0.00,
+                    'total' => $subtotal,
+                    'status' => 'pending',
+                ]);
+            }
         });
 
         return response()->json([
