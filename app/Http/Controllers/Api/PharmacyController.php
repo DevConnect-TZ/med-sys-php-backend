@@ -231,4 +231,18 @@ class PharmacyController extends Controller
             'inventory' => new PharmacyInventoryResource($inventory)
         ], 200);
     }
+
+    /**
+     * Delete inventory item
+     * Required roles: admin, pharmacist
+     */
+    public function destroyInventory(PharmacyInventory $inventory): JsonResponse
+    {
+        $inventory->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Inventory item deleted successfully',
+        ], 200);
+    }
 }

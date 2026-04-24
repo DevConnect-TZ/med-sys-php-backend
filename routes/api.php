@@ -87,11 +87,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/invitations', [UserController::class, 'getInvitations']);
     });
 
-    // Patient Management (admin, receptionist, doctor, nurse)
-    Route::middleware('role:admin,receptionist,doctor,nurse')->group(function () {
+    // Patient reads (admin, receptionist, doctor, nurse, cashier for invoice billing lookup)
+    Route::middleware('role:admin,receptionist,doctor,nurse,cashier')->group(function () {
         Route::get('/patients', [PatientController::class, 'index']);
         Route::get('/patients/{patient}', [PatientController::class, 'show']);
         Route::get('/patients/{patient}/visits', [PatientController::class, 'getVisits']);
+    });
+
+    // Patient updates (admin, receptionist, doctor, nurse)
+    Route::middleware('role:admin,receptionist,doctor,nurse')->group(function () {
         Route::put('/patients/{patient}', [PatientController::class, 'update']);
     });
 
@@ -191,11 +195,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/pharmacy/prescriptions/{prescription}', [PharmacyController::class, 'updatePrescription']);
     });
 
-    // Pharmacy Inventory (admin, pharmacist)
-    Route::middleware('role:admin,pharmacist')->group(function () {
+    // Pharmacy Inventory (admin, pharmacist, doctor read access for prescribing)
+    Route::middleware('role:admin,pharmacist,doctor')->group(function () {
         Route::get('/pharmacy/inventory', [PharmacyController::class, 'indexInventory']);
+    });
+
+    // Pharmacy Inventory mutations (admin, pharmacist)
+    Route::middleware('role:admin,pharmacist')->group(function () {
         Route::post('/pharmacy/inventory', [PharmacyController::class, 'storeInventory']);
         Route::put('/pharmacy/inventory/{inventory}', [PharmacyController::class, 'updateInventory']);
+        Route::delete('/pharmacy/inventory/{inventory}', [PharmacyController::class, 'destroyInventory']);
     });
 
     // Invoices (admin, receptionist, cashier)
@@ -204,8 +213,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/billing/invoices/{invoice}', [InvoiceController::class, 'show']);
     });
 
-    // Invoices (receptionist)
-    Route::middleware('role:receptionist')->group(function () {
+    // Invoices (receptionist, cashier)
+    Route::middleware('role:receptionist,cashier')->group(function () {
         Route::post('/billing/invoices', [InvoiceController::class, 'store']);
         Route::put('/billing/invoices/{invoice}', [InvoiceController::class, 'update']);
     });

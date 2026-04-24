@@ -7,6 +7,7 @@ use App\Http\Resources\VisitResource;
 use App\Models\Invoice;
 use App\Models\LabOrder;
 use App\Models\Patient;
+use App\Models\PharmacyInventory;
 use App\Models\Prescription;
 use App\Models\User;
 use App\Models\Visit;
@@ -14,6 +15,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class VisitController extends Controller
 {
@@ -393,6 +395,19 @@ class VisitController extends Controller
             return response()->json(['success' => false, 'message' => 'Visit is not awaiting prescription payment'], 422);
         }
 
+        $prescription = $visit->prescriptions()->where('status', 'pending')->latest()->first();
+        if (!$prescription) {
+            return response()->json(['success' => false, 'message' => 'No pending prescription found for this visit'], 422);
+        }
+
+        $shortages = $this->getMedicationShortages($prescription->medications ?? []);
+        if (!empty($shortages)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Insufficient inventory for: ' . implode('; ', $shortages),
+            ], 422);
+        }
+
         $visit->update(['workflow_status' => 'pharmacy_pending']);
 
         // Also mark any linked invoice as paid
@@ -429,16 +444,128 @@ class VisitController extends Controller
         }
 
         $prescription = $visit->prescriptions()->where('status', 'pending')->latest()->first();
-        if ($prescription) {
-            $prescription->update(['status' => 'dispensed']);
+        if (!$prescription) {
+            return response()->json(['success' => false, 'message' => 'No pending prescription found for this visit'], 422);
         }
 
-        $visit->update(['workflow_status' => 'completed', 'status' => 'completed']);
+        try {
+            DB::transaction(function () use ($visit, $prescription) {
+                $this->consumeMedicationInventory($prescription->medications ?? []);
+                $prescription->update(['status' => 'dispensed']);
+                $visit->update(['workflow_status' => 'completed', 'status' => 'completed']);
+            });
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'success' => false,
+                'message' => $exception->errors()['medications'][0] ?? 'Insufficient inventory to dispense prescription',
+            ], 422);
+        }
 
         return response()->json([
             'success' => true,
             'message' => 'Medicines dispensed. Visit completed.',
             'visit' => new VisitResource($visit)
         ], 200);
+    }
+
+    private function getMedicationShortages(array $medications): array
+    {
+        $requirements = [];
+
+        foreach ($medications as $medication) {
+            $name = trim((string) ($medication['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+
+            $key = mb_strtolower($name);
+            $requirements[$key] = [
+                'name' => $name,
+                'required' => ($requirements[$key]['required'] ?? 0) + (float) ($medication['quantity'] ?? 0),
+            ];
+        }
+
+        $shortages = [];
+
+        foreach ($requirements as $requirement) {
+            $available = PharmacyInventory::query()
+                ->where(function ($query) use ($requirement) {
+                    $query->whereRaw('LOWER(medication_name) = ?', [mb_strtolower($requirement['name'])])
+                        ->orWhereRaw('LOWER(generic_name) = ?', [mb_strtolower($requirement['name'])]);
+                })
+                ->where(function ($query) {
+                    $query->whereNull('expiry_date')
+                        ->orWhereDate('expiry_date', '>=', now()->toDateString());
+                })
+                ->sum('quantity');
+
+            if ($available < $requirement['required']) {
+                $shortages[] = sprintf(
+                    '%s (required %s, available %s)',
+                    $requirement['name'],
+                    rtrim(rtrim(number_format($requirement['required'], 2, '.', ''), '0'), '.'),
+                    rtrim(rtrim(number_format((float) $available, 2, '.', ''), '0'), '.')
+                );
+            }
+        }
+
+        return $shortages;
+    }
+
+    private function consumeMedicationInventory(array $medications): void
+    {
+        $requirements = [];
+
+        foreach ($medications as $medication) {
+            $name = trim((string) ($medication['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+
+            $key = mb_strtolower($name);
+            $requirements[$key] = [
+                'name' => $name,
+                'required' => ($requirements[$key]['required'] ?? 0) + (float) ($medication['quantity'] ?? 0),
+            ];
+        }
+
+        $shortages = $this->getMedicationShortages($medications);
+        if (!empty($shortages)) {
+            throw ValidationException::withMessages([
+                'medications' => ['Insufficient inventory for: ' . implode('; ', $shortages)],
+            ]);
+        }
+
+        foreach ($requirements as $requirement) {
+            $remaining = $requirement['required'];
+
+            $inventoryItems = PharmacyInventory::query()
+                ->where(function ($query) use ($requirement) {
+                    $query->whereRaw('LOWER(medication_name) = ?', [mb_strtolower($requirement['name'])])
+                        ->orWhereRaw('LOWER(generic_name) = ?', [mb_strtolower($requirement['name'])]);
+                })
+                ->where(function ($query) {
+                    $query->whereNull('expiry_date')
+                        ->orWhereDate('expiry_date', '>=', now()->toDateString());
+                })
+                ->where('quantity', '>', 0)
+                ->orderByRaw('expiry_date IS NULL, expiry_date ASC')
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($inventoryItems as $inventoryItem) {
+                if ($remaining <= 0) {
+                    break;
+                }
+
+                $deduction = min((float) $inventoryItem->quantity, $remaining);
+                $inventoryItem->update([
+                    'quantity' => (float) $inventoryItem->quantity - $deduction,
+                ]);
+
+                $remaining -= $deduction;
+            }
+        }
     }
 }
