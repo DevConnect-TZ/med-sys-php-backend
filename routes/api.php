@@ -120,6 +120,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::middleware('role:cashier')->group(function () {
         Route::post('/appointments/{appointment}/mark-paid', [AppointmentController::class, 'markPaid']);
+        Route::post('/appointments/{appointment}/confirm-pharmacy-payment', [AppointmentController::class, 'confirmPharmacyPayment']);
     });
 
     Route::middleware('role:pharmacist')->group(function () {
@@ -145,6 +146,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::middleware('role:cashier')->group(function () {
         Route::post('/visits/{visit}/mark-paid', [VisitController::class, 'markPaid']);
+        Route::post('/visits/{visit}/confirm-pharmacy-payment', [VisitController::class, 'confirmPharmacyPayment']);
     });
 
     Route::middleware('role:pharmacist')->group(function () {

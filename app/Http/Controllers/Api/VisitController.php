@@ -40,7 +40,7 @@ class VisitController extends Controller
                     });
                     break;
                 case 'cashier':
-                    $query->where('workflow_status', 'awaiting_payment');
+                    $query->whereIn('workflow_status', ['awaiting_payment', 'pharmacy_awaiting_payment']);
                     break;
                 case 'lab_technician':
                     $query->whereIn('workflow_status', ['paid', 'lab_pending']);
@@ -313,6 +313,18 @@ class VisitController extends Controller
         $pendingLabs = $visit->labOrders()->where('status', 'pending')->count();
         $visit->update(['workflow_status' => $pendingLabs > 0 ? 'lab_pending' : 'lab_completed']);
 
+        // Also mark any linked invoice as paid
+        $invoice = $visit->invoices()->where('status', 'pending')->latest()->first();
+        if ($invoice) {
+            $invoice->update([
+                'status' => 'paid',
+                'payment_method' => 'cash',
+                'amount_paid' => $invoice->total,
+                'payment_date' => now()->toDateString(),
+                'paid_at' => now(),
+            ]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Payment confirmed. Visit forwarded to lab.',
@@ -358,11 +370,46 @@ class VisitController extends Controller
             'notes' => $validated['notes'] ?? null,
         ]);
 
-        $visit->update(['workflow_status' => 'pharmacy_pending']);
+        $visit->update(['workflow_status' => 'pharmacy_awaiting_payment']);
 
         return response()->json([
             'success' => true,
-            'message' => 'Prescription created and forwarded to pharmacy',
+            'message' => 'Prescription created and forwarded to cashier for payment confirmation',
+            'visit' => new VisitResource($visit)
+        ], 200);
+    }
+
+    /**
+     * Cashier confirms prescription payment, forwards to pharmacy
+     */
+    public function confirmPharmacyPayment(Visit $visit): JsonResponse
+    {
+        $user = auth()->user();
+        if (!$user->hasRole('cashier')) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        if ($visit->workflow_status !== 'pharmacy_awaiting_payment') {
+            return response()->json(['success' => false, 'message' => 'Visit is not awaiting prescription payment'], 422);
+        }
+
+        $visit->update(['workflow_status' => 'pharmacy_pending']);
+
+        // Also mark any linked invoice as paid
+        $invoice = $visit->invoices()->where('status', 'pending')->latest()->first();
+        if ($invoice) {
+            $invoice->update([
+                'status' => 'paid',
+                'payment_method' => 'cash',
+                'amount_paid' => $invoice->total,
+                'payment_date' => now()->toDateString(),
+                'paid_at' => now(),
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Prescription payment confirmed. Forwarded to pharmacy.',
             'visit' => new VisitResource($visit)
         ], 200);
     }

@@ -49,7 +49,7 @@ class AppointmentController extends Controller
                     });
                     break;
                 case 'cashier':
-                    $query->where('workflow_status', 'awaiting_payment');
+                    $query->whereIn('workflow_status', ['awaiting_payment', 'pharmacy_awaiting_payment']);
                     break;
                 case 'lab_technician':
                     $query->whereIn('workflow_status', ['paid', 'lab_pending']);
@@ -373,6 +373,18 @@ class AppointmentController extends Controller
         $pendingLabs = $appointment->labOrders()->where('status', 'pending')->count();
         $appointment->update(['workflow_status' => $pendingLabs > 0 ? 'lab_pending' : 'lab_completed']);
 
+        // Also mark any linked invoice as paid
+        $invoice = $appointment->invoices()->where('status', 'pending')->latest()->first();
+        if ($invoice) {
+            $invoice->update([
+                'status' => 'paid',
+                'payment_method' => 'cash',
+                'amount_paid' => $invoice->total,
+                'payment_date' => now()->toDateString(),
+                'paid_at' => now(),
+            ]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Payment confirmed. Appointment forwarded to lab.',
@@ -423,11 +435,46 @@ class AppointmentController extends Controller
             'notes' => $validated['notes'] ?? null,
         ]);
 
-        $appointment->update(['workflow_status' => 'pharmacy_pending']);
+        $appointment->update(['workflow_status' => 'pharmacy_awaiting_payment']);
 
         return response()->json([
             'success' => true,
-            'message' => 'Prescription created and forwarded to pharmacy',
+            'message' => 'Prescription created and forwarded to cashier for payment confirmation',
+            'appointment' => new AppointmentResource($appointment)
+        ], 200);
+    }
+
+    /**
+     * Cashier confirms prescription payment, forwards to pharmacy
+     */
+    public function confirmPharmacyPayment(Appointment $appointment): JsonResponse
+    {
+        $user = auth()->user();
+        if (!$user->hasRole('cashier')) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        if ($appointment->workflow_status !== 'pharmacy_awaiting_payment') {
+            return response()->json(['success' => false, 'message' => 'Appointment is not awaiting prescription payment'], 422);
+        }
+
+        $appointment->update(['workflow_status' => 'pharmacy_pending']);
+
+        // Also mark any linked invoice as paid
+        $invoice = $appointment->invoices()->where('status', 'pending')->latest()->first();
+        if ($invoice) {
+            $invoice->update([
+                'status' => 'paid',
+                'payment_method' => 'cash',
+                'amount_paid' => $invoice->total,
+                'payment_date' => now()->toDateString(),
+                'paid_at' => now(),
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Prescription payment confirmed. Forwarded to pharmacy.',
             'appointment' => new AppointmentResource($appointment)
         ], 200);
     }
