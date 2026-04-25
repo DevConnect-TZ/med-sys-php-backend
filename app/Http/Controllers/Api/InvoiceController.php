@@ -157,14 +157,22 @@ class InvoiceController extends Controller
         ]);
 
         // Auto-advance appointment workflow if linked
-        if ($invoice->appointment_id && $invoice->appointment->workflow_status === 'awaiting_payment') {
-            $invoice->appointment->update(['workflow_status' => 'paid']);
+        if ($invoice->appointment_id) {
+            if ($invoice->appointment->workflow_status === 'awaiting_payment') {
+                $invoice->appointment->update(['workflow_status' => 'paid']);
+            } elseif ($invoice->appointment->workflow_status === 'pharmacy_awaiting_payment') {
+                $invoice->appointment->update(['workflow_status' => 'pharmacy_pending']);
+            }
         }
 
         // Auto-advance visit workflow if linked
-        if ($invoice->visit_id && $invoice->visit->workflow_status === 'awaiting_payment') {
-            $pendingLabs = $invoice->visit->labOrders()->where('status', 'pending')->count();
-            $invoice->visit->update(['workflow_status' => $pendingLabs > 0 ? 'lab_pending' : 'lab_completed']);
+        if ($invoice->visit_id) {
+            if ($invoice->visit->workflow_status === 'awaiting_payment') {
+                $pendingLabs = $invoice->visit->labOrders()->where('status', 'pending')->count();
+                $invoice->visit->update(['workflow_status' => $pendingLabs > 0 ? 'lab_pending' : 'lab_completed']);
+            } elseif ($invoice->visit->workflow_status === 'pharmacy_awaiting_payment') {
+                $invoice->visit->update(['workflow_status' => 'pharmacy_pending']);
+            }
         }
 
         // Send payment confirmation email

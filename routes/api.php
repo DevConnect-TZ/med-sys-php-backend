@@ -207,14 +207,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/pharmacy/inventory/{inventory}', [PharmacyController::class, 'destroyInventory']);
     });
 
-    // Invoices (admin, receptionist, cashier)
-    Route::middleware('role:admin,receptionist,cashier')->group(function () {
+    // Invoices read access (admin, receptionist, cashier, pharmacist)
+    Route::middleware('role:admin,receptionist,cashier,pharmacist')->group(function () {
         Route::get('/billing/invoices', [InvoiceController::class, 'index']);
         Route::get('/billing/invoices/{invoice}', [InvoiceController::class, 'show']);
     });
 
-    // Invoices (receptionist, cashier)
-    Route::middleware('role:receptionist,cashier')->group(function () {
+    // Invoices mutations (receptionist, cashier, pharmacist)
+    Route::middleware('role:receptionist,cashier,pharmacist')->group(function () {
         Route::post('/billing/invoices', [InvoiceController::class, 'store']);
         Route::put('/billing/invoices/{invoice}', [InvoiceController::class, 'update']);
     });

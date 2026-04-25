@@ -415,6 +415,7 @@ class AppointmentController extends Controller
             'medications.*.frequency' => 'required|string',
             'medications.*.duration' => 'required|string',
             'medications.*.quantity' => 'required|numeric',
+            'medications.*.price' => 'nullable|numeric|min:0',
             'medications.*.instructions' => 'nullable|string',
             'notes' => 'nullable|string',
         ]);
@@ -437,11 +438,58 @@ class AppointmentController extends Controller
             'notes' => $validated['notes'] ?? null,
         ]);
 
+        $invoiceItems = collect($validated['medications'])
+            ->map(function ($medication) {
+                $quantity = (float) ($medication['quantity'] ?? 0);
+                $unitPrice = (float) ($medication['price'] ?? 0);
+
+                return [
+                    'description' => 'Medicine: ' . $medication['name'],
+                    'quantity' => $quantity,
+                    'unit_price' => $unitPrice,
+                    'total' => $quantity * $unitPrice,
+                ];
+            })
+            ->values()
+            ->all();
+
+        $invoiceSubtotal = collect($invoiceItems)->sum('total');
+        $pendingInvoice = $appointment->invoices()->where('status', 'pending')->latest()->first();
+
+        if ($pendingInvoice) {
+            $pendingInvoice->update([
+                'items' => json_encode($invoiceItems),
+                'subtotal' => $invoiceSubtotal,
+                'tax' => 0,
+                'discount' => 0,
+                'total' => $invoiceSubtotal,
+                'invoice_date' => now()->toDateString(),
+            ]);
+        } else {
+            $lastInvoice = Invoice::latest('id')->first();
+            $invoiceNumber = 'INV' . str_pad(($lastInvoice?->id ?? 0) + 1, 6, '0', STR_PAD_LEFT);
+
+            Invoice::create([
+                'invoice_number' => $invoiceNumber,
+                'patient_id' => $appointment->patient_id,
+                'patient_name' => $appointment->patient_name,
+                'visit_id' => $visit->id,
+                'appointment_id' => $appointment->id,
+                'invoice_date' => now()->toDateString(),
+                'items' => json_encode($invoiceItems),
+                'subtotal' => $invoiceSubtotal,
+                'tax' => 0,
+                'discount' => 0,
+                'total' => $invoiceSubtotal,
+                'status' => 'pending',
+            ]);
+        }
+
         $appointment->update(['workflow_status' => 'pharmacy_awaiting_payment']);
 
         return response()->json([
             'success' => true,
-            'message' => 'Prescription created and forwarded to cashier for payment confirmation',
+            'message' => 'Prescription created and forwarded to cashier with invoice for payment',
             'appointment' => new AppointmentResource($appointment)
         ], 200);
     }
