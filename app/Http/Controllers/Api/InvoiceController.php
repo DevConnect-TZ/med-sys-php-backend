@@ -57,6 +57,106 @@ class InvoiceController extends Controller
     }
 
     /**
+     * Income statistics: daily/weekly/monthly totals plus cumulative series
+     * Required roles: admin, cashier
+     */
+    public function incomeStats(): JsonResponse
+    {
+        $today = now()->startOfDay();
+
+        $paidQuery = fn () => Invoice::where('status', 'paid');
+
+        $dailyIncome = (clone $paidQuery())->whereDate('paid_at', $today->toDateString())
+            ->orWhere(function ($q) use ($today) {
+                $q->where('status', 'paid')
+                    ->whereDate('payment_date', $today->toDateString());
+            })
+            ->get();
+
+        $stats = [
+            'daily_income' => (float) $dailyIncome->sum('amount_paid'),
+            'daily_payments' => $dailyIncome->count(),
+        ];
+
+        // Weekly (last 7 days including today)
+        $weekStart = $today->copy()->subDays(6);
+        $stats['weekly_income'] = (float) Invoice::where('status', 'paid')
+            ->where(function ($q) use ($weekStart) {
+                $q->whereDate('paid_at', '>=', $weekStart)
+                    ->orWhere(function ($sq) use ($weekStart) {
+                        $sq->whereNull('paid_at')
+                            ->whereDate('payment_date', '>=', $weekStart);
+                    });
+            })
+            ->where(function ($q) use ($today) {
+                $q->whereDate('paid_at', '<=', $today)
+                    ->orWhere(function ($sq) use ($today) {
+                        $sq->whereNull('paid_at')
+                            ->whereDate('payment_date', '<=', $today);
+                    });
+            })
+            ->sum('amount_paid');
+
+        // Monthly (current calendar month)
+        $stats['monthly_income'] = (float) Invoice::where('status', 'paid')
+            ->where(function ($q) {
+                $q->whereBetween('paid_at', [now()->startOfMonth(), now()->endOfMonth()])
+                    ->orWhere(function ($sq) {
+                        $sq->whereNull('paid_at')
+                            ->whereBetween('payment_date', [now()->startOfMonth(), now()->endOfMonth()]);
+                    });
+            })
+            ->sum('amount_paid');
+
+        // Totals
+        $stats['completed_payments'] = Invoice::where('status', 'paid')->count();
+        $stats['pending_invoices'] = Invoice::where('status', 'pending')->count();
+        $stats['pending_amount'] = (float) Invoice::where('status', 'pending')->sum('total');
+        $stats['total_income'] = (float) Invoice::where('status', 'paid')->sum('amount_paid');
+
+        // Daily income series for the last 30 days (cumulative)
+        $seriesStart = $today->copy()->subDays(29);
+        $rows = Invoice::where('status', 'paid')
+            ->where(function ($q) use ($seriesStart) {
+                $q->whereDate('paid_at', '>=', $seriesStart)
+                    ->orWhere(function ($sq) use ($seriesStart) {
+                        $sq->whereNull('paid_at')
+                            ->whereDate('payment_date', '>=', $seriesStart);
+                    });
+            })
+            ->get();
+
+        $byDay = [];
+        foreach ($rows as $invoice) {
+            $day = $invoice->paid_at?->toDateString() ?? ($invoice->payment_date?->toDateString() ?? null);
+            if ($day) {
+                $byDay[$day] = ($byDay[$day] ?? 0) + (float) $invoice->amount_paid;
+            }
+        }
+
+        $dailySeries = [];
+        $cumulative = 0.0;
+        for ($i = 29; $i >= 0; $i--) {
+            $date = $today->copy()->subDays($i)->toDateString();
+            $income = $byDay[$date] ?? 0.0;
+            $cumulative += $income;
+            $dailySeries[] = [
+                'date' => $date,
+                'income' => round($income, 2),
+                'cumulative' => round($cumulative, 2),
+            ];
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'stats' => $stats,
+                'series' => $dailySeries,
+            ],
+        ]);
+    }
+
+    /**
      * Create invoice
      * Required roles: admin, receptionist
      */

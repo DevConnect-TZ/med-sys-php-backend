@@ -212,6 +212,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:admin,receptionist,cashier,pharmacist')->group(function () {
         Route::get('/billing/invoices', [InvoiceController::class, 'index']);
         Route::get('/billing/invoices/{invoice}', [InvoiceController::class, 'show']);
+        Route::get('/billing/income-stats', [InvoiceController::class, 'incomeStats']);
     });
 
     // Invoices mutations (receptionist, cashier, pharmacist)
