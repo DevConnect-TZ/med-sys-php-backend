@@ -8,6 +8,8 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Validator;
 
 class DoctorScheduleController extends Controller
@@ -46,6 +48,130 @@ class DoctorScheduleController extends Controller
                 ];
             }),
         ]);
+    }
+
+    /**
+     * Generate random schedules for one or more doctors within a working window.
+     * Doctors that do not exist yet are created automatically.
+     */
+    public function generate(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'names' => 'required|string|max:5000',
+            'from_time' => 'required|date_format:H:i',
+            'to_time' => 'required|date_format:H:i|after:from_time',
+            'days' => 'sometimes|integer|min:1|max:7',
+        ]);
+
+        $names = array_values(array_unique(array_filter(array_map('trim',
+            preg_split('/[\r\n,]+/', $validated['names'])
+        ))));
+
+        if (empty($names)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'At least one doctor name is required',
+            ], 422);
+        }
+
+        $fromMinutes = ((int) substr($validated['from_time'], 0, 2)) * 60 + (int) substr($validated['from_time'], 3, 2);
+        $toMinutes = ((int) substr($validated['to_time'], 0, 2)) * 60 + (int) substr($validated['to_time'], 3, 2);
+        $windowMinutes = $toMinutes - $fromMinutes;
+
+        if ($windowMinutes < 60) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Working window must be at least 1 hour',
+            ], 422);
+        }
+
+        $results = [];
+
+        foreach ($names as $name) {
+            if (mb_strlen($name) > 255) {
+                continue;
+            }
+
+            $doctor = User::where('role', 'doctor')
+                ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
+                ->first();
+
+            $isNew = false;
+            if (!$doctor) {
+                $doctor = User::create([
+                    'name' => $name,
+                    'email' => $this->generateUniqueEmail($name),
+                    'password' => Hash::make(Str::random(16)),
+                    'role' => 'doctor',
+                    'is_active' => true,
+                ]);
+                $isNew = true;
+            }
+
+            DoctorSchedule::where('doctor_id', $doctor->id)->delete();
+
+            $daysCount = $validated['days'] ?? random_int(3, 5);
+            $allDays = [0, 1, 2, 3, 4, 5, 6];
+            shuffle($allDays);
+            $days = array_slice($allDays, 0, $daysCount);
+
+            $minShift = 180;
+            $maxShift = min(480, $windowMinutes);
+            $created = [];
+
+            foreach ($days as $day) {
+                $shift = random_int($minShift, max($minShift, $maxShift));
+                $latestStart = $windowMinutes - $shift;
+                $startOffset = $latestStart > 0 ? random_int(0, $latestStart) : 0;
+
+                $schedule = DoctorSchedule::create([
+                    'doctor_id' => $doctor->id,
+                    'day_of_week' => $day,
+                    'start_time' => sprintf('%02d:%02d', intdiv($fromMinutes + $startOffset, 60), ($fromMinutes + $startOffset) % 60),
+                    'end_time' => sprintf('%02d:%02d', intdiv($fromMinutes + $startOffset + $shift, 60), ($fromMinutes + $startOffset + $shift) % 60),
+                    'is_active' => true,
+                ]);
+
+                $created[] = [
+                    'id' => $schedule->id,
+                    'day_of_week' => $schedule->day_of_week,
+                    'day_name' => $schedule->day_name,
+                    'start_time' => $schedule->start_time?->format('H:i'),
+                    'end_time' => $schedule->end_time?->format('H:i'),
+                ];
+            }
+
+            $results[] = [
+                'doctor_id' => $doctor->id,
+                'doctor_name' => $doctor->name,
+                'is_new' => $isNew,
+                'email' => $isNew ? $doctor->email : null,
+                'schedules' => $created,
+            ];
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Schedules generated successfully',
+            'data' => $results,
+        ], 201);
+    }
+
+    /**
+     * Generate a unique email for a new doctor based on their name
+     */
+    private function generateUniqueEmail(string $name): string
+    {
+        $slug = Str::slug($name, '.') ?: 'doctor';
+        $email = $slug . '@hospital.com';
+        $i = 1;
+
+        while (User::where('email', $email)->exists()) {
+            $email = $slug . $i . '@hospital.com';
+            $i++;
+        }
+
+        return $email;
     }
 
     /**

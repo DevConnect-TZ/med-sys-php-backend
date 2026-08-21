@@ -44,6 +44,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/doctor-schedules/check-availability', [DoctorScheduleController::class, 'checkAvailability']);
     Route::middleware('role:admin')->group(function () {
         Route::post('/doctor-schedules', [DoctorScheduleController::class, 'store']);
+        Route::post('/doctor-schedules/generate', [DoctorScheduleController::class, 'generate']);
         Route::get('/doctor-schedules/{schedule}', [DoctorScheduleController::class, 'show']);
         Route::put('/doctor-schedules/{schedule}', [DoctorScheduleController::class, 'update']);
         Route::delete('/doctor-schedules/{schedule}', [DoctorScheduleController::class, 'destroy']);
