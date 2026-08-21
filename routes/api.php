@@ -138,8 +138,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/visits/{visit}', [VisitController::class, 'show']);
     });
 
-    // Visit/EMR Management (receptionist, nurse)
-    Route::middleware('role:receptionist,nurse')->group(function () {
+    // Visit/EMR Management (admin, doctor, receptionist, nurse)
+    Route::middleware('role:admin,doctor,receptionist,nurse')->group(function () {
         Route::post('/visits', [VisitController::class, 'store']);
         Route::put('/visits/{visit}', [VisitController::class, 'update']);
     });
