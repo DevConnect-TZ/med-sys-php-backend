@@ -22,7 +22,7 @@ class InvoiceResource extends JsonResource
             'visit_id' => $this->visit_id,
             'appointment_id' => $this->appointment_id,
             'invoice_date' => $this->invoice_date,
-            'items' => $this->items,
+            'items' => is_string($this->items) ? (json_decode($this->items, true) ?? []) : ($this->items ?? []),
             'subtotal' => $this->subtotal,
             'tax' => $this->tax,
             'discount' => $this->discount,

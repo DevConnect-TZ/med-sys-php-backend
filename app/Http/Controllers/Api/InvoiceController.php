@@ -87,7 +87,7 @@ class InvoiceController extends Controller
             'visit_id' => $validated['visit_id'] ?? null,
             'appointment_id' => $validated['appointment_id'] ?? null,
             'invoice_date' => $validated['invoice_date'],
-            'items' => $validated['items'],
+            'items' => $this->decodeItems($validated['items']),
             'subtotal' => $validated['subtotal'],
             'tax' => $validated['tax'] ?? 0.00,
             'discount' => $validated['discount'] ?? 0.00,
@@ -119,6 +119,10 @@ class InvoiceController extends Controller
             'discount' => 'sometimes|numeric|min:0',
             'total' => 'sometimes|numeric|min:0',
         ]);
+
+        if (array_key_exists('items', $validated)) {
+            $validated['items'] = $this->decodeItems($validated['items']);
+        }
 
         $invoice->update($validated);
 
@@ -183,5 +187,18 @@ class InvoiceController extends Controller
             'message' => 'Invoice marked as paid successfully. Payment confirmation sent to patient.',
             'invoice' => new InvoiceResource($invoice)
         ], 200);
+    }
+
+    /**
+     * Decode a JSON string of items into an array (prevents double encoding)
+     */
+    private function decodeItems(mixed $items): mixed
+    {
+        if (is_string($items)) {
+            $decoded = json_decode($items, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+
+        return $items;
     }
 }
