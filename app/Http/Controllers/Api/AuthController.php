@@ -254,7 +254,7 @@ class AuthController extends Controller
         ]);
 
         // Generate reset URL (frontend URL)
-        $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
+        $frontendUrl = rtrim(config('app.frontend_url', 'http://localhost:3000'), '/');
         $resetUrl = "{$frontendUrl}/reset-password?token={$token}&email=" . urlencode($validated['email']);
 
         // Send email

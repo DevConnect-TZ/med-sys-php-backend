@@ -1,21 +1,17 @@
 <?php
-require 'vendor/autoload.php';
 
-$app = require_once 'bootstrap/app.php';
-$kernel = $app->make('Illuminate\Contracts\Console\Kernel');
+use Illuminate\Contracts\Console\Kernel;
+use Illuminate\Support\Facades\Artisan;
+
+// Run from the backend root: php test-smtp.php recipient@example.com
+require __DIR__.'/vendor/autoload.php';
+
+$app = require __DIR__.'/bootstrap/app.php';
+$kernel = $app->make(Kernel::class);
 $kernel->bootstrap();
 
-try {
-    // Try to send a test email
-    \Illuminate\Support\Facades\Mail::raw('This is a test email from SMTP', function ($message) {
-        $message->to('skillflowtz@gmail.com')
-                ->subject('SMTP Configuration Test');
-    });
-    echo "✓ Email sent successfully!\n";
-} catch (Exception $e) {
-    echo "✗ Error: " . $e->getMessage() . "\n";
-    echo "Class: " . get_class($e) . "\n";
-    if (method_exists($e, 'getPrevious') && $e->getPrevious()) {
-        echo "Previous: " . $e->getPrevious()->getMessage() . "\n";
-    }
-}
+$status = Artisan::call('mail:test', [
+    'recipient' => $argv[1] ?? '',
+]);
+echo Artisan::output();
+exit($status);
