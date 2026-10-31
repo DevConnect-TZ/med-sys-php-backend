@@ -175,6 +175,20 @@ class UserController extends Controller
     }
 
     /**
+     * Delete an invitation without changing the invited user's account.
+     * Required roles: admin (enforced by route middleware).
+     */
+    public function deleteInvitation(Invitation $invitation): JsonResponse
+    {
+        $invitation->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Invitation deleted successfully',
+        ]);
+    }
+
+    /**
      * Validate invitation token (public)
      */
     public function validateInvitation(string $token): JsonResponse

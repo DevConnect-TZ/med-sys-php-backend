@@ -86,6 +86,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/users/{user}', [UserController::class, 'destroy']);
         Route::post('/invitations', [UserController::class, 'createInvitation']);
         Route::get('/invitations', [UserController::class, 'getInvitations']);
+        Route::delete('/invitations/{invitation}', [UserController::class, 'deleteInvitation']);
     });
 
     // Patient reads (admin, receptionist, doctor, nurse, cashier for invoice billing lookup)
